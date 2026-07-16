@@ -71,7 +71,7 @@ describe("SessionsBoard", () => {
 		expect(within(idleCard).getByText("Idle")).toBeInTheDocument();
 	});
 
-	it("collapses idle no-PR sessions into a nested Working-column stack", () => {
+	it("collapses idle sessions into a nested Working-column stack", () => {
 		workspaceQueryMock.mockReturnValue({
 			data: [
 				{
@@ -124,17 +124,18 @@ describe("SessionsBoard", () => {
 		renderBoard("p1");
 
 		expect(screen.getByText("active-task")).toBeInTheDocument();
-		expect(screen.getByText("idle-with-pr-task")).toBeInTheDocument();
 		expect(screen.queryByText("idle-no-pr-task")).not.toBeInTheDocument();
+		expect(screen.queryByText("idle-with-pr-task")).not.toBeInTheDocument();
 
 		const idleStackToggle = screen.getByRole("button", { name: /idle sessions/i });
 		expect(idleStackToggle).toHaveAttribute("aria-expanded", "false");
-		expect(within(idleStackToggle).getByText("1")).toBeInTheDocument();
+		expect(within(idleStackToggle).getByText("2")).toBeInTheDocument();
 
 		fireEvent.click(idleStackToggle);
 
 		expect(idleStackToggle).toHaveAttribute("aria-expanded", "true");
 		const idleCard = screen.getByText("idle-no-pr-task").closest('[role="button"]') as HTMLElement;
+		expect(screen.getByText("idle-with-pr-task")).toBeInTheDocument();
 		const badge = within(idleCard).getByText("Working").closest("span");
 		expect(badge).toHaveClass("text-working");
 		expect(badge).not.toHaveClass("text-passive");

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { navigateMock, workspaceQueryMock } = vi.hoisted(() => ({
@@ -66,11 +66,12 @@ describe("SessionsBoard", () => {
 
 		renderBoard("p1");
 
+		fireEvent.click(screen.getByRole("button", { name: /idle sessions/i }));
 		const idleCard = screen.getByText("brand-font-pipeline").closest('[role="button"]') as HTMLElement;
 		expect(within(idleCard).getByText("Idle")).toBeInTheDocument();
 	});
 
-	it("renders idle activity in an Idle stack while keeping a status-based badge", () => {
+	it("collapses idle no-PR sessions into a nested Working-column stack", () => {
 		workspaceQueryMock.mockReturnValue({
 			data: [
 				{
@@ -94,13 +95,25 @@ describe("SessionsBoard", () => {
 							id: "s1",
 							workspaceId: "p1",
 							workspaceName: "radic",
-							title: "idle-activity-task",
+							title: "idle-no-pr-task",
 							provider: "claude-code",
 							branch: "ao/radic-5",
 							status: "working",
 							activity: { state: "idle", lastActivityAt: "2026-01-01T00:00:00Z" },
 							updatedAt: "2026-01-01T00:00:00Z",
 							prs: [],
+						},
+						{
+							id: "s2",
+							workspaceId: "p1",
+							workspaceName: "radic",
+							title: "idle-with-pr-task",
+							provider: "claude-code",
+							branch: "ao/radic-6",
+							status: "working",
+							activity: { state: "idle", lastActivityAt: "2026-01-01T00:00:00Z" },
+							updatedAt: "2026-01-01T00:00:00Z",
+							prs: [{ number: 7, url: "https://github.com/acme/radic/pull/7", state: "open" }],
 						},
 					],
 				},
@@ -111,8 +124,17 @@ describe("SessionsBoard", () => {
 		renderBoard("p1");
 
 		expect(screen.getByText("active-task")).toBeInTheDocument();
-		expect(screen.getByText("Idle")).toBeInTheDocument();
-		const idleCard = screen.getByText("idle-activity-task").closest('[role="button"]') as HTMLElement;
+		expect(screen.getByText("idle-with-pr-task")).toBeInTheDocument();
+		expect(screen.queryByText("idle-no-pr-task")).not.toBeInTheDocument();
+
+		const idleStackToggle = screen.getByRole("button", { name: /idle sessions/i });
+		expect(idleStackToggle).toHaveAttribute("aria-expanded", "false");
+		expect(within(idleStackToggle).getByText("1")).toBeInTheDocument();
+
+		fireEvent.click(idleStackToggle);
+
+		expect(idleStackToggle).toHaveAttribute("aria-expanded", "true");
+		const idleCard = screen.getByText("idle-no-pr-task").closest('[role="button"]') as HTMLElement;
 		const badge = within(idleCard).getByText("Working").closest("span");
 		expect(badge).toHaveClass("text-working");
 		expect(badge).not.toHaveClass("text-passive");

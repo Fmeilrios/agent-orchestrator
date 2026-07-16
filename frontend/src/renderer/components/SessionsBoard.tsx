@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
+import { AlertTriangle, ChevronRight, Plus, RotateCw } from "lucide-react";
 import { DashboardSubhead } from "./DashboardSubhead";
 import {
 	type WorkspaceSession,
@@ -331,29 +331,50 @@ function ZoneColumn({
 				<span className="ml-auto font-mono text-caption leading-none text-passive">{sessions.length}</span>
 			</div>
 			<div className="min-h-0 flex-1 overflow-y-auto px-2.75 pb-3">
-				<div className="flex flex-col gap-2.5">
+				<div className="flex min-h-full flex-col gap-2.5">
 					{activeSessions.map((session) => (
 						<SessionCard key={session.id} session={session} onOpen={() => onOpen(session)} />
 					))}
-					{idleSessions.length > 0 ? (
-						<div className={cn("flex flex-col gap-2.5", activeSessions.length > 0 && "pt-1")}>
-							<div
-								className={cn(
-									"flex items-center gap-2 px-1 pt-1 font-mono text-2xs font-semibold uppercase tracking-wide-md text-passive",
-									activeSessions.length > 0 && "border-t border-border",
-								)}
-							>
-								<span>Idle</span>
-								<span className="ml-auto">{idleSessions.length}</span>
-							</div>
-							{idleSessions.map((session) => (
-								<SessionCard key={session.id} session={session} onOpen={() => onOpen(session)} />
-							))}
-						</div>
-					) : null}
+					{idleSessions.length > 0 ? <IdleSessionsStack sessions={idleSessions} onOpen={onOpen} /> : null}
 				</div>
 			</div>
 		</section>
+	);
+}
+
+function IdleSessionsStack({
+	sessions,
+	onOpen,
+}: {
+	sessions: WorkspaceSession[];
+	onOpen: (s: WorkspaceSession) => void;
+}) {
+	const [expanded, setExpanded] = useState(false);
+	return (
+		<div className="mt-auto overflow-hidden rounded-panel border border-border bg-surface/70">
+			<button
+				aria-expanded={expanded}
+				aria-label={`Idle sessions (${sessions.length})`}
+				className="flex min-h-row-md w-full items-center gap-2 px-3 py-2 text-left text-passive transition-colors hover:text-foreground"
+				onClick={() => setExpanded((value) => !value)}
+				type="button"
+			>
+				<ChevronRight
+					className={cn("size-icon-2xs shrink-0 transition-transform duration-normal", expanded && "rotate-90")}
+					aria-hidden="true"
+				/>
+				<span className="size-dot-sm shrink-0 rounded-full bg-passive" aria-hidden="true" />
+				<span className="font-mono text-2xs font-semibold uppercase tracking-wide-md">Idle</span>
+				<span className="ml-auto shrink-0 font-mono text-caption leading-none text-passive">{sessions.length}</span>
+			</button>
+			{expanded ? (
+				<div className="flex flex-col gap-2.5 border-t border-border p-2.5">
+					{sessions.map((session) => (
+						<SessionCard key={session.id} session={session} onOpen={() => onOpen(session)} />
+					))}
+				</div>
+			) : null}
+		</div>
 	);
 }
 

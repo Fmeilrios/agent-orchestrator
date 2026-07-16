@@ -164,6 +164,8 @@ export function getSessionDotView(session: Pick<WorkspaceSession, "status">): { 
 	return { className: getAttentionZoneView(session.status).dotClassName };
 }
 
-export function isSessionInIdleStack(session: Pick<WorkspaceSession, "status" | "activity">): boolean {
-	return session.status === "idle" || (session.status === "working" && session.activity?.state === "idle");
+export function isSessionInIdleStack(session: Pick<WorkspaceSession, "status" | "activity" | "prs">): boolean {
+	const hasPR = session.prs.length > 0;
+	const agentWorking = session.activity?.state === "active";
+	return !hasPR && !agentWorking && (session.status === "idle" || session.status === "working");
 }

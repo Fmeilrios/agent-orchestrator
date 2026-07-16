@@ -195,11 +195,79 @@ describe("SessionsBoard", () => {
 
 		fireEvent.click(idleStackToggle);
 
-		expect(idleStackToggle).toHaveAttribute("aria-expanded", "true");
+		expect(screen.getByRole("button", { name: /idle sessions/i })).toHaveAttribute("aria-expanded", "true");
 		const idleCard = screen.getByText("idle-no-pr-task").closest('[role="button"]') as HTMLElement;
 		expect(screen.getByText("idle-with-pr-task")).toBeInTheDocument();
 		const badge = within(idleCard).getByText("Working").closest("span");
 		expect(badge).toHaveClass("text-working");
 		expect(badge).not.toHaveClass("text-passive");
+	});
+
+	it("expands idle as the main working-column panel and restores working from the header", () => {
+		workspaceQueryMock.mockReturnValue({
+			data: [
+				{
+					id: "p1",
+					name: "radic",
+					path: "/tmp/radic",
+					sessions: [
+						{
+							id: "s0",
+							workspaceId: "p1",
+							workspaceName: "radic",
+							title: "active-task",
+							provider: "claude-code",
+							branch: "ao/radic-4",
+							status: "working",
+							activity: { state: "active", lastActivityAt: "2026-01-01T00:00:00Z" },
+							updatedAt: "2026-01-01T00:00:00Z",
+							prs: [],
+						},
+						{
+							id: "s1",
+							workspaceId: "p1",
+							workspaceName: "radic",
+							title: "idle-task",
+							provider: "claude-code",
+							branch: "ao/radic-5",
+							status: "idle",
+							activity: { state: "idle", lastActivityAt: "2026-01-01T00:00:00Z" },
+							updatedAt: "2026-01-01T00:00:00Z",
+							prs: [],
+						},
+					],
+				},
+			],
+			isError: false,
+		});
+
+		renderBoard("p1");
+
+		expect(screen.getByText("active-task")).toBeInTheDocument();
+		expect(screen.queryByText("idle-task")).not.toBeInTheDocument();
+
+		const idleToggle = screen.getByRole("button", { name: /idle sessions/i });
+		expect(idleToggle).toHaveAttribute("aria-expanded", "false");
+		fireEvent.click(idleToggle);
+
+		expect(screen.getByRole("button", { name: /idle sessions/i })).toHaveAttribute("aria-expanded", "true");
+		expect(screen.getByText("idle-task")).toBeInTheDocument();
+		expect(screen.queryByText("active-task")).not.toBeInTheDocument();
+
+		fireEvent.click(screen.getByRole("button", { name: /idle sessions/i }));
+
+		expect(screen.getByText("active-task")).toBeInTheDocument();
+		expect(screen.queryByText("idle-task")).not.toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /idle sessions/i })).toHaveAttribute("aria-expanded", "false");
+
+		fireEvent.click(screen.getByRole("button", { name: /idle sessions/i }));
+		expect(screen.getByText("idle-task")).toBeInTheDocument();
+		expect(screen.queryByText("active-task")).not.toBeInTheDocument();
+
+		fireEvent.click(screen.getByRole("button", { name: /show working sessions/i }));
+
+		expect(screen.getByText("active-task")).toBeInTheDocument();
+		expect(screen.queryByText("idle-task")).not.toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /idle sessions/i })).toHaveAttribute("aria-expanded", "false");
 	});
 });

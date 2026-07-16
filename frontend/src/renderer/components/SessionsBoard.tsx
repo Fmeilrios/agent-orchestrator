@@ -307,9 +307,32 @@ function ZoneColumn({
 	sessions: WorkspaceSession[];
 	onOpen: (s: WorkspaceSession) => void;
 }) {
-	const activeSessions =
-		col.zone === "working" ? sessions.filter((session) => !isSessionInIdleStack(session)) : sessions;
-	const idleSessions = col.zone === "working" ? sessions.filter(isSessionInIdleStack) : [];
+	const isWorkingColumn = col.zone === "working";
+	const [workingPanel, setWorkingPanel] = useState<"working" | "idle">("working");
+	const activeSessions = isWorkingColumn ? sessions.filter((session) => !isSessionInIdleStack(session)) : sessions;
+	const idleSessions = isWorkingColumn ? sessions.filter(isSessionInIdleStack) : [];
+	const idleExpanded = isWorkingColumn && workingPanel === "idle" && idleSessions.length > 0;
+	useEffect(() => {
+		if (workingPanel === "idle" && idleSessions.length === 0) {
+			setWorkingPanel("working");
+		}
+	}, [idleSessions.length, workingPanel]);
+
+	const headerContents = (
+		<>
+			<span
+				className="size-dot-sm rounded-full"
+				style={{
+					background: col.dot,
+					boxShadow: col.dotGlow ? `0 0 7px color-mix(in srgb, ${col.dot} 60%, transparent)` : undefined,
+				}}
+			/>
+			<span className={cn("text-caption font-semibold uppercase tracking-wide-md", col.titleClassName)}>
+				{col.label}
+			</span>
+			<span className="ml-auto font-mono text-caption leading-none text-passive">{sessions.length}</span>
+		</>
+	);
 	return (
 		<section
 			className="flex min-w-0 flex-col overflow-hidden rounded-panel"
@@ -317,25 +340,43 @@ function ZoneColumn({
 				background: `linear-gradient(180deg, ${col.glow}, transparent var(--size-kanban-glow)), var(--color-overlay-subtle)`,
 			}}
 		>
-			<div className="flex shrink-0 items-center gap-2.25 px-3.75 pb-2.75 pt-3.5">
-				<span
-					className="size-dot-sm rounded-full"
-					style={{
-						background: col.dot,
-						boxShadow: col.dotGlow ? `0 0 7px color-mix(in srgb, ${col.dot} 60%, transparent)` : undefined,
-					}}
-				/>
-				<span className={cn("text-caption font-semibold uppercase tracking-wide-md", col.titleClassName)}>
-					{col.label}
-				</span>
-				<span className="ml-auto font-mono text-caption leading-none text-passive">{sessions.length}</span>
-			</div>
+			{isWorkingColumn ? (
+				<button
+					aria-expanded={!idleExpanded}
+					aria-label="Show working sessions"
+					className="flex w-full shrink-0 items-center gap-2.25 px-3.75 pb-2.75 pt-3.5 text-left transition-colors hover:text-foreground"
+					onClick={() => setWorkingPanel("working")}
+					type="button"
+				>
+					{headerContents}
+				</button>
+			) : (
+				<div className="flex shrink-0 items-center gap-2.25 px-3.75 pb-2.75 pt-3.5">{headerContents}</div>
+			)}
 			<div className="min-h-0 flex-1 overflow-y-auto px-2.75 pb-3">
 				<div className="flex min-h-full flex-col gap-2.5">
-					{activeSessions.map((session) => (
-						<SessionCard key={session.id} session={session} onOpen={() => onOpen(session)} />
-					))}
-					{idleSessions.length > 0 ? <IdleSessionsStack sessions={idleSessions} onOpen={onOpen} /> : null}
+					{idleExpanded ? (
+						<IdleSessionsStack
+							expanded
+							sessions={idleSessions}
+							onOpen={onOpen}
+							onToggle={() => setWorkingPanel("working")}
+						/>
+					) : (
+						<>
+							{activeSessions.map((session) => (
+								<SessionCard key={session.id} session={session} onOpen={() => onOpen(session)} />
+							))}
+							{idleSessions.length > 0 ? (
+								<IdleSessionsStack
+									expanded={false}
+									sessions={idleSessions}
+									onOpen={onOpen}
+									onToggle={() => setWorkingPanel("idle")}
+								/>
+							) : null}
+						</>
+					)}
 				</div>
 			</div>
 		</section>
@@ -343,20 +384,31 @@ function ZoneColumn({
 }
 
 function IdleSessionsStack({
+	expanded,
 	sessions,
 	onOpen,
+	onToggle,
 }: {
+	expanded: boolean;
 	sessions: WorkspaceSession[];
 	onOpen: (s: WorkspaceSession) => void;
+	onToggle: () => void;
 }) {
-	const [expanded, setExpanded] = useState(false);
 	return (
-		<div className="mt-auto overflow-hidden rounded-panel border border-border bg-surface/70">
+		<div
+			className={cn(
+				"overflow-hidden rounded-panel border border-border bg-surface/70",
+				expanded ? "flex min-h-0 flex-1 flex-col" : "mt-auto",
+			)}
+		>
 			<button
 				aria-expanded={expanded}
 				aria-label={`Idle sessions (${sessions.length})`}
-				className="flex min-h-row-md w-full items-center gap-2 px-3 py-2 text-left text-passive transition-colors hover:text-foreground"
-				onClick={() => setExpanded((value) => !value)}
+				className={cn(
+					"flex min-h-row-md w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:text-foreground",
+					expanded ? "text-foreground" : "text-passive",
+				)}
+				onClick={onToggle}
 				type="button"
 			>
 				<ChevronRight
@@ -368,7 +420,7 @@ function IdleSessionsStack({
 				<span className="ml-auto shrink-0 font-mono text-caption leading-none text-passive">{sessions.length}</span>
 			</button>
 			{expanded ? (
-				<div className="flex flex-col gap-2.5 border-t border-border p-2.5">
+				<div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto border-t border-border p-2.5">
 					{sessions.map((session) => (
 						<SessionCard key={session.id} session={session} onOpen={() => onOpen(session)} />
 					))}

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { navigateMock, workspaceQueryMock } = vi.hoisted(() => ({
@@ -66,10 +66,11 @@ describe("SessionsBoard", () => {
 
 		renderBoard("p1");
 
-		expect(screen.getByText("Idle")).toBeInTheDocument();
+		const idleCard = screen.getByText("brand-font-pipeline").closest('[role="button"]') as HTMLElement;
+		expect(within(idleCard).getByText("Idle")).toBeInTheDocument();
 	});
 
-	it("renders idle activity in the working column with passive styling", () => {
+	it("renders idle activity in an Idle stack while keeping a status-based badge", () => {
 		workspaceQueryMock.mockReturnValue({
 			data: [
 				{
@@ -78,10 +79,22 @@ describe("SessionsBoard", () => {
 					path: "/tmp/radic",
 					sessions: [
 						{
+							id: "s0",
+							workspaceId: "p1",
+							workspaceName: "radic",
+							title: "active-task",
+							provider: "claude-code",
+							branch: "ao/radic-4",
+							status: "working",
+							activity: { state: "active", lastActivityAt: "2026-01-01T00:00:00Z" },
+							updatedAt: "2026-01-01T00:00:00Z",
+							prs: [],
+						},
+						{
 							id: "s1",
 							workspaceId: "p1",
 							workspaceName: "radic",
-							title: "brand-font-pipeline",
+							title: "idle-activity-task",
 							provider: "claude-code",
 							branch: "ao/radic-5",
 							status: "working",
@@ -97,9 +110,11 @@ describe("SessionsBoard", () => {
 
 		renderBoard("p1");
 
-		expect(screen.getAllByText("Working").length).toBeGreaterThan(0);
-		const badge = screen.getByText("Idle").closest("span");
-		expect(badge).toHaveClass("text-passive");
-		expect(badge).not.toHaveClass("text-working");
+		expect(screen.getByText("active-task")).toBeInTheDocument();
+		expect(screen.getByText("Idle")).toBeInTheDocument();
+		const idleCard = screen.getByText("idle-activity-task").closest('[role="button"]') as HTMLElement;
+		const badge = within(idleCard).getByText("Working").closest("span");
+		expect(badge).toHaveClass("text-working");
+		expect(badge).not.toHaveClass("text-passive");
 	});
 });

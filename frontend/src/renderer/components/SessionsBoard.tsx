@@ -307,7 +307,8 @@ function ZoneColumn({
 	sessions: WorkspaceSession[];
 	onOpen: (s: WorkspaceSession) => void;
 }) {
-	const activeSessions = col.zone === "working" ? sessions.filter((session) => !isSessionInIdleStack(session)) : sessions;
+	const activeSessions =
+		col.zone === "working" ? sessions.filter((session) => !isSessionInIdleStack(session)) : sessions;
 	const idleSessions = col.zone === "working" ? sessions.filter(isSessionInIdleStack) : [];
 	return (
 		<section
@@ -324,7 +325,9 @@ function ZoneColumn({
 						boxShadow: col.dotGlow ? `0 0 7px color-mix(in srgb, ${col.dot} 60%, transparent)` : undefined,
 					}}
 				/>
-				<span className={cn("text-caption font-semibold uppercase tracking-wide-md", col.titleClassName)}>{col.label}</span>
+				<span className={cn("text-caption font-semibold uppercase tracking-wide-md", col.titleClassName)}>
+					{col.label}
+				</span>
 				<span className="ml-auto font-mono text-caption leading-none text-passive">{sessions.length}</span>
 			</div>
 			<div className="min-h-0 flex-1 overflow-y-auto px-2.75 pb-3">

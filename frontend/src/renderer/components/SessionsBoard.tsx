@@ -397,8 +397,8 @@ function IdleSessionsStack({
 	return (
 		<div
 			className={cn(
-				"overflow-hidden rounded-panel border border-border bg-surface/70",
-				expanded ? "flex min-h-0 flex-1 flex-col" : "mt-auto",
+				"overflow-hidden rounded-panel border border-border bg-surface/70 transition-[flex-grow,opacity,transform] duration-200 ease-out motion-reduce:transition-none",
+				expanded ? "flex min-h-0 flex-1 flex-col opacity-100" : "mt-auto opacity-95 hover:opacity-100",
 			)}
 		>
 			<button
@@ -420,7 +420,7 @@ function IdleSessionsStack({
 				<span className="ml-auto shrink-0 font-mono text-caption leading-none text-passive">{sessions.length}</span>
 			</button>
 			{expanded ? (
-				<div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto border-t border-border p-2.5">
+				<div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto border-t border-border p-2.5 animate-in fade-in-0 slide-in-from-top-1 duration-200 motion-reduce:animate-none">
 					{sessions.map((session) => (
 						<SessionCard key={session.id} session={session} onOpen={() => onOpen(session)} />
 					))}

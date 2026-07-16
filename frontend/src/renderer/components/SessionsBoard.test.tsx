@@ -248,9 +248,12 @@ describe("SessionsBoard", () => {
 
 		const idleToggle = screen.getByRole("button", { name: /idle sessions/i });
 		expect(idleToggle).toHaveAttribute("aria-expanded", "false");
+		expect(idleToggle.parentElement).toHaveClass("transition-[flex-grow,opacity,transform]");
+		expect(idleToggle.parentElement).toHaveClass("motion-reduce:transition-none");
 		fireEvent.click(idleToggle);
 
 		expect(screen.getByRole("button", { name: /idle sessions/i })).toHaveAttribute("aria-expanded", "true");
+		expect(screen.getByRole("button", { name: /idle sessions/i }).parentElement).toHaveClass("flex-1");
 		expect(screen.getByText("idle-task")).toBeInTheDocument();
 		expect(screen.queryByText("active-task")).not.toBeInTheDocument();
 

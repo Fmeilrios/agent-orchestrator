@@ -71,6 +71,68 @@ describe("SessionsBoard", () => {
 		expect(within(idleCard).getByText("Idle")).toBeInTheDocument();
 	});
 
+	it("uses distinct card badge tones for idle, no signal, and draft PR sessions", () => {
+		workspaceQueryMock.mockReturnValue({
+			data: [
+				{
+					id: "p1",
+					name: "radic",
+					path: "/tmp/radic",
+					sessions: [
+						{
+							id: "s1",
+							workspaceId: "p1",
+							workspaceName: "radic",
+							title: "idle-card-task",
+							provider: "claude-code",
+							branch: "ao/radic-5",
+							status: "idle",
+							activity: { state: "idle", lastActivityAt: "2026-01-01T00:00:00Z" },
+							updatedAt: "2026-01-01T00:00:00Z",
+							prs: [],
+						},
+						{
+							id: "s2",
+							workspaceId: "p1",
+							workspaceName: "radic",
+							title: "no-signal-card-task",
+							provider: "claude-code",
+							branch: "ao/radic-6",
+							status: "no_signal",
+							activity: { state: "idle", lastActivityAt: "2026-01-01T00:00:00Z" },
+							updatedAt: "2026-01-01T00:00:00Z",
+							prs: [],
+						},
+						{
+							id: "s3",
+							workspaceId: "p1",
+							workspaceName: "radic",
+							title: "draft-card-task",
+							provider: "claude-code",
+							branch: "ao/radic-7",
+							status: "draft",
+							activity: { state: "idle", lastActivityAt: "2026-01-01T00:00:00Z" },
+							updatedAt: "2026-01-01T00:00:00Z",
+							prs: [],
+						},
+					],
+				},
+			],
+			isError: false,
+		});
+
+		renderBoard("p1");
+		fireEvent.click(screen.getByRole("button", { name: /idle sessions/i }));
+
+		const idleCard = screen.getByText("idle-card-task").closest('[role="button"]') as HTMLElement;
+		const noSignalCard = screen.getByText("no-signal-card-task").closest('[role="button"]') as HTMLElement;
+		const draftCard = screen.getByText("draft-card-task").closest('[role="button"]') as HTMLElement;
+
+		expect(within(idleCard).getByText("Idle").closest("span")).toHaveClass("text-passive");
+		expect(within(noSignalCard).getByText("No signal").closest("span")).toHaveClass("text-warning");
+		expect(within(draftCard).getByText("Draft PR").closest("span")).toHaveClass("text-accent");
+	});
+
 	it("collapses idle sessions into a nested Working-column stack", () => {
 		workspaceQueryMock.mockReturnValue({
 			data: [

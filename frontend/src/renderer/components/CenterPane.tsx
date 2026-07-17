@@ -1,4 +1,4 @@
-import { ChevronLeft, Maximize2, Minimize2, Shield } from "lucide-react";
+import { ChevronLeft, Keyboard, Maximize2, Minimize2, Shield } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type WheelEvent } from "react";
 import { TERMINAL_FONT_SIZE_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN } from "../lib/design-tokens";
 import type { Theme } from "../stores/ui-store";
@@ -64,6 +64,13 @@ export function CenterPane({ session, theme, daemonReady, terminalTarget, onSele
 		} catch (error) {
 			console.warn("Unable to toggle terminal fullscreen", error);
 		}
+	}, []);
+
+	const focusTerminalInput = useCallback(() => {
+		const pane = paneRef.current;
+		if (!pane) return;
+		const input = pane.querySelector<HTMLElement>(".xterm-helper-textarea");
+		input?.focus();
 	}, []);
 
 	const handleWheelZoom = useCallback(
@@ -140,6 +147,15 @@ export function CenterPane({ session, theme, daemonReady, terminalTarget, onSele
 						) : (
 							<Maximize2 className="size-icon-md" aria-hidden="true" />
 						)}
+					</button>
+					<button
+						aria-label="Focus terminal input"
+						className="inline-flex size-control-sm items-center justify-center rounded-sm bg-transparent text-control leading-none transition-[background,color] duration-fast hover:bg-interactive-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent/50"
+						onClick={focusTerminalInput}
+						title="Focus terminal input"
+						type="button"
+					>
+						<Keyboard className="size-icon-md" aria-hidden="true" />
 					</button>
 				</div>
 			</div>

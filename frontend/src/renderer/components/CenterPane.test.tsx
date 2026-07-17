@@ -4,7 +4,14 @@ import type { WorkspaceSession } from "../types/workspace";
 import { CenterPane } from "./CenterPane";
 
 // The terminal body pulls in xterm/SSE machinery irrelevant to the toolbar under test.
-vi.mock("./TerminalPane", () => ({ TerminalPane: () => <div>terminal body</div> }));
+vi.mock("./TerminalPane", () => ({
+	TerminalPane: () => (
+		<div>
+			<textarea className="xterm-helper-textarea" />
+			terminal body
+		</div>
+	),
+}));
 
 const worker = {
 	id: "sess-1",
@@ -41,5 +48,13 @@ describe("CenterPane toolbar session label", () => {
 
 		const header = screen.getByText("TERMINAL").parentElement?.parentElement;
 		expect(header).toHaveClass("h-inspector-tabs");
+	});
+
+	it("exposes a focus control for terminal input", () => {
+		render(<CenterPane session={worker} theme="dark" daemonReady />);
+
+		screen.getByRole("button", { name: "Focus terminal input" }).click();
+
+		expect(document.activeElement).toHaveClass("xterm-helper-textarea");
 	});
 });

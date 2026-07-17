@@ -13,6 +13,7 @@ import { forgetNotificationSession, rememberNotificationSession } from "../../li
 import { useApp } from "../../lib/store";
 import { theme } from "../../lib/theme";
 import { terminalInputDelta, terminalInputEnter, terminalInputKey } from "../../lib/terminalInput";
+import { shouldStartVoiceAction } from "../../lib/voiceAction";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 const FONT_SIZE = 12;
@@ -787,9 +788,14 @@ export default function TerminalScreen() {
 	}, [listening]);
 
 	useEffect(() => {
-		if (params.voice !== "1" || notificationVoiceStartedRef.current || AppState.currentState !== "active") return;
-		notificationVoiceStartedRef.current = true;
-		void startVoiceInput();
+		const startPendingVoice = (state: string) => {
+			if (!shouldStartVoiceAction(params.voice === "1", notificationVoiceStartedRef.current, state)) return;
+			notificationVoiceStartedRef.current = true;
+			void startVoiceInput();
+		};
+		startPendingVoice(AppState.currentState);
+		const appState = AppState.addEventListener("change", startPendingVoice);
+		return () => appState.remove();
 	}, [params.voice, startVoiceInput]);
 
 	// High-level message to the agent (AO's /send) - distinct from raw keystrokes.

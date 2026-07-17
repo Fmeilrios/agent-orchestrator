@@ -126,6 +126,7 @@ beforeEach(() => {
 	postMock.mockResolvedValue({ data: { ok: true, sessionId: "sess-1" }, error: undefined });
 	useWorkspaceQueryMock.mockReset();
 	useWorkspaceQueryMock.mockReturnValue({ data: [], isError: false, isLoading: false });
+	Object.defineProperty(navigator, "platform", { configurable: true, value: "Win32" });
 });
 
 describe("ShellTopbar status pill", () => {
@@ -178,6 +179,17 @@ describe("ShellTopbar orchestrator actions", () => {
 		expect(screen.getByRole("button", { name: "Open Kanban" })).toHaveClass("bg-primary");
 		expect(screen.getByRole("button", { name: "New task" })).toHaveClass("bg-raised");
 		expect(screen.getByRole("button", { name: "New task" })).not.toHaveClass("bg-primary");
+	});
+});
+
+describe("ShellTopbar speech to text", () => {
+	it("opens the speech-to-text overlay on Windows sessions", async () => {
+		renderTopbar(worker);
+
+		await userEvent.click(screen.getByRole("button", { name: "Open speech-to-text" }));
+
+		expect(screen.getByRole("heading", { name: "Speech to text" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "Start listening" })).toBeInTheDocument();
 	});
 });
 

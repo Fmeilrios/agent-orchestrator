@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import { GitBranch, LayoutDashboard, PanelRightClose, PanelRightOpen, Plus, Square, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { NotificationCenter } from "./NotificationCenter";
+import { SpeechToTextDialog } from "./SpeechToTextDialog";
 import {
 	findProjectOrchestrator,
 	isOrchestratorSession,
@@ -35,6 +36,14 @@ const isLinux =
 		.includes("linux");
 const dragStyle = isMac ? ({ WebkitAppRegion: "drag" } as React.CSSProperties) : undefined;
 const noDragStyle = isMac ? ({ WebkitAppRegion: "no-drag" } as React.CSSProperties) : undefined;
+function isWindowsRenderer() {
+	return (
+		typeof navigator !== "undefined" &&
+		((navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform)
+			.toLowerCase()
+			.includes("win")
+	);
+}
 
 // Topbar shows only the raw agent activity state. SCM/context badges stay in
 // the inspector Summary > Activity row.
@@ -248,6 +257,7 @@ export function ShellTopbar() {
 								)}
 							</TopbarButton>
 						)}
+						{isWindowsRenderer() && !isOrchestrator ? <SpeechToTextDialog /> : null}
 					</>
 				) : null}
 			</div>

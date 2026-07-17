@@ -556,8 +556,14 @@ export function XtermTerminal(props: XtermTerminalProps) {
 		const compositionInput = (event: CompositionEvent) => {
 			emitUserInput(event.data, "composition");
 		};
+		const insertTextInput = (event: Event) => {
+			const customEvent = event as CustomEvent<string>;
+			if (typeof customEvent.detail !== "string" || !customEvent.detail.trim()) return;
+			pasteText(customEvent.detail);
+		};
 		host.addEventListener("paste", pasteInput, true);
 		host.addEventListener("compositionend", compositionInput, true);
+		window.addEventListener("ao:terminal:insert-text", insertTextInput);
 
 		// A file dropped on the pane inserts its path, mirroring a native terminal
 		// so an agent (e.g. Claude Code) attaches it. The sandboxed renderer cannot
@@ -625,6 +631,7 @@ export function XtermTerminal(props: XtermTerminalProps) {
 			selectionChange.dispose();
 			host.removeEventListener("paste", pasteInput, true);
 			host.removeEventListener("compositionend", compositionInput, true);
+			window.removeEventListener("ao:terminal:insert-text", insertTextInput);
 			host.removeEventListener("dragover", dragOverInput);
 			host.removeEventListener("drop", dropInput);
 			clearSuppressNativePaste();

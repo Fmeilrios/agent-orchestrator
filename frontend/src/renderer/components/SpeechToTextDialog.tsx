@@ -1,6 +1,5 @@
 import { Mic, MicOff } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { aoBridge } from "../lib/bridge";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { TopbarButton } from "./TopbarButton";
@@ -42,7 +41,7 @@ function getSpeechRecognitionCtor(): SpeechRecognitionCtor | undefined {
 
 function transcriptFromEvent(event: SpeechRecognitionEventLike): string {
 	const parts: string[] = [];
-	for (let i = event.resultIndex; i < event.results.length; i += 1) {
+	for (let i = 0; i < event.results.length; i += 1) {
 		const text = event.results[i]?.[0]?.transcript?.trim();
 		if (text) parts.push(text);
 	}
@@ -102,7 +101,6 @@ export function SpeechToTextDialog() {
 	const insertTranscript = useCallback(async () => {
 		const text = transcript.trim();
 		if (!text) return;
-		await aoBridge.clipboard.writeText(text);
 		window.dispatchEvent(new CustomEvent<string>(INSERT_EVENT, { detail: text }));
 		setOpen(false);
 		reset();

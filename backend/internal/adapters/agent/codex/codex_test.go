@@ -42,6 +42,7 @@ func TestGetLaunchCommandBuildsCrossPlatformArgv(t *testing.T) {
 	workspace := canonicalTempDir(t)
 
 	cmd, err := plugin.GetLaunchCommand(context.Background(), ports.LaunchConfig{
+		Config:           ports.AgentConfig{Model: "  gpt-5.4-mini  "},
 		Permissions:      ports.PermissionModeBypassPermissions,
 		Prompt:           "-fix this",
 		SystemPromptFile: filepath.Join("tmp", "prompt with spaces.md"),
@@ -66,6 +67,7 @@ func TestGetLaunchCommandBuildsCrossPlatformArgv(t *testing.T) {
 	want = append(want,
 		"-c", `projects={`+codexTOMLConfigString(workspace)+`={trust_level="trusted"}}`,
 		"-c", "developer_instructions="+codexTOMLConfigString("inline wins"),
+		"--model", "gpt-5.4-mini",
 		"--", "-fix this",
 	)
 	if !reflect.DeepEqual(cmd, want) {
@@ -468,6 +470,7 @@ func TestGetRestoreCommandReadsAgentSessionID(t *testing.T) {
 	workspace := canonicalTempDir(t)
 
 	cmd, ok, err := plugin.GetRestoreCommand(context.Background(), ports.RestoreConfig{
+		Config:           ports.AgentConfig{Model: "  gpt-5.4-mini  "},
 		Permissions:      ports.PermissionModeAuto,
 		SystemPrompt:     "restore inline wins",
 		SystemPromptFile: filepath.Join("tmp", "restore-system.md"),
@@ -498,6 +501,7 @@ func TestGetRestoreCommandReadsAgentSessionID(t *testing.T) {
 	want = append(want,
 		"-c", `projects={`+codexTOMLConfigString(workspace)+`={trust_level="trusted"}}`,
 		"-c", "developer_instructions="+codexTOMLConfigString("restore inline wins"),
+		"--model", "gpt-5.4-mini",
 		"thread-123",
 	)
 	if !reflect.DeepEqual(cmd, want) {

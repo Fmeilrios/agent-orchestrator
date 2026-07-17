@@ -7,6 +7,7 @@
 	"scripts": {
 		"start": "expo start",
 		"android": "expo run:android",
+		"android:release": "expo run:android --variant release --no-bundler",
 		"ios": "expo run:ios",
 		"typecheck": "tsc --noEmit",
 		"build": "npm run typecheck",

@@ -9,6 +9,11 @@ export function terminalInputDelta(previous: string, next: string): string {
 	return DELETE.repeat(before.length - shared) + after.slice(shared).join("");
 }
 
+/** Enter is sent separately, then both native and displayed buffers restart. */
+export function terminalInputEnter(): { data: string; buffer: string } {
+	return { data: "\r", buffer: "" };
+}
+
 export const terminalNamedKey: Record<string, string> = {
 	Tab: "\t",
 	Escape: "\x1b",

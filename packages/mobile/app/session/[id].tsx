@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { XtermJsWebView, type XtermWebViewHandle } from "@fressh/react-native-xtermjs-webview";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Alert, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, AppState, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { getPreview, isTerminalStatus, killSession, sendMessage } from "../../lib/api";
@@ -11,7 +11,7 @@ import { haptics } from "../../lib/haptics";
 import { MuxClient, type MuxStatus } from "../../lib/mux";
 import { useApp } from "../../lib/store";
 import { theme } from "../../lib/theme";
-import { terminalInputDelta, terminalNamedKey } from "../../lib/terminalInput";
+import { terminalInputDelta, terminalInputEnter, terminalNamedKey } from "../../lib/terminalInput";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 const FONT_SIZE = 12;
@@ -103,7 +103,7 @@ const TERMINAL_ENHANCE_JS = `
   function applyScale() {
     try {
       var b = box(); if (!b || !b.natW || !b.contW) return;
-      Z.min = Math.min(1, b.contW / b.natW, b.contH / b.natH);
+      Z.min = Math.min(b.contW / b.natW, b.contH / b.natH);
       if (!Z.zoomed) { Z.s = Z.min; Z.tx = 0; Z.ty = 0; }
       else { if (Z.s < Z.min) Z.s = Z.min; clampT(b); }
       applyTransform(b);
@@ -112,7 +112,7 @@ const TERMINAL_ENHANCE_JS = `
   // Zoom to scale s keeping the content under screen point (ax, ay) fixed.
   function setZoom(s, ax, ay) {
     var b = box(); if (!b) return;
-    if (s < Z.min) s = Z.min; if (s > 1) s = 1;
+    if (s < Z.min) s = Z.min; if (s > Math.max(1, Z.min)) s = Math.max(1, Z.min);
     var px = (ax - Z.tx) / Z.s, py = (ay - Z.ty) / Z.s;
     Z.s = s; Z.tx = ax - px * s; Z.ty = ay - py * s;
     Z.zoomed = s > Z.min + 0.001;
@@ -458,6 +458,7 @@ export default function TerminalScreen() {
 	// which we forward to the PTY over the mux. Focus it to type, blur it to hide.
 	const kbInputRef = useRef<TextInput | null>(null);
 	const terminalBufferRef = useRef("");
+	const speechAllowedRef = useRef(true);
 
 	const [cfg, setCfg] = useState<ServerConfig | null>(null);
 	const [status, setStatus] = useState<MuxStatus>("connecting");
@@ -513,8 +514,28 @@ export default function TerminalScreen() {
 	});
 	useSpeechRecognitionEvent("error", (event) => {
 		setListening(false);
-		setSpeechError(event.message || "Voice input stopped. Try again.");
+		if (event.error !== "aborted") setSpeechError(event.message || "Voice input stopped. Try again.");
 	});
+
+	useEffect(() => {
+		const stop = (updateState: boolean) => {
+			speechAllowedRef.current = false;
+			try {
+				ExpoSpeechRecognitionModule.abort();
+			} catch {
+				// Recognition may already be stopped.
+			}
+			if (updateState) setListening(false);
+		};
+		const appState = AppState.addEventListener("change", (state) => {
+			if (state === "active") speechAllowedRef.current = true;
+			else stop(true);
+		});
+		return () => {
+			appState.remove();
+			stop(false);
+		};
+	}, []);
 
 	// Neither platform shrinks the layout for the keyboard: iOS never has, and on
 	// Android edge-to-edge (edgeToEdgeEnabled) defeats windowSoftInputMode=adjustResize
@@ -732,19 +753,37 @@ export default function TerminalScreen() {
 		[id, projectId],
 	);
 
+	const onTerminalSubmit = useCallback(() => {
+		const enter = terminalInputEnter();
+		terminalBufferRef.current = enter.buffer;
+		setTerminalBuffer(enter.buffer);
+		muxRef.current?.sendInput(id, enter.data, projectId);
+	}, [id, projectId]);
+
 	const startVoiceInput = useCallback(async () => {
 		if (listening) {
-			ExpoSpeechRecognitionModule.stop();
+			try {
+				ExpoSpeechRecognitionModule.stop();
+			} catch {
+				setListening(false);
+			}
 			return;
 		}
 		setCompose(true);
 		setSpeechError(null);
-		const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-		if (!permission.granted) {
-			setSpeechError("Microphone access is needed for voice input.");
-			return;
+		speechAllowedRef.current = true;
+		try {
+			const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+			if (!speechAllowedRef.current) return;
+			if (!permission.granted) {
+				setSpeechError("Allow microphone access to use voice input.");
+				return;
+			}
+			ExpoSpeechRecognitionModule.start({ interimResults: true, continuous: false });
+		} catch (error) {
+			setListening(false);
+			setSpeechError(error instanceof Error && error.message ? error.message : "Voice input could not start. Try again.");
 		}
-		ExpoSpeechRecognitionModule.start({ interimResults: true, continuous: false });
 	}, [listening]);
 
 	// High-level message to the agent (AO's /send) - distinct from raw keystrokes.
@@ -1009,7 +1048,7 @@ export default function TerminalScreen() {
 				value={terminalBuffer}
 				onKeyPress={onKeyPress}
 				onChangeText={onTerminalTextChange}
-				onSubmitEditing={() => sendKey("\r")}
+				onSubmitEditing={onTerminalSubmit}
 				blurOnSubmit={false}
 				multiline={false}
 				autoCapitalize="none"

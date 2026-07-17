@@ -3,6 +3,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { getSessions, isTerminalStatus, sendMessage } from "./api";
 import { isConfigured, loadConfig } from "./config";
+import { notificationOwnership } from "./notificationOwnership";
 import { notificationAction, selectNotificationTarget } from "./notificationTarget";
 
 export const REPLY_ACTION = "ao-reply";
@@ -11,13 +12,14 @@ const CATEGORY = "ao-ongoing";
 const CHANNEL = "ao-ongoing";
 const CURRENT_SESSION_KEY = "ao.notificationCurrentSession";
 const NOTIFICATION_KEY = "ao.ongoingNotification";
+const ownership = notificationOwnership(AsyncStorage, CURRENT_SESSION_KEY);
 
 export async function rememberNotificationSession(id: string): Promise<void> {
-	await AsyncStorage.setItem(CURRENT_SESSION_KEY, id);
+	await ownership.remember(id);
 }
 
 export async function forgetNotificationSession(id: string): Promise<void> {
-	if ((await AsyncStorage.getItem(CURRENT_SESSION_KEY)) === id) await AsyncStorage.removeItem(CURRENT_SESSION_KEY);
+	await ownership.forget(id);
 }
 
 async function targetSession(required: boolean) {

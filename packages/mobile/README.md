@@ -14,6 +14,7 @@ computer over your local network (or Tailscale). It never runs agents itself.
 - [Install](#install)
 - [Step 1 — Turn on Connect Mobile on the desktop](#step-1--turn-on-connect-mobile-on-the-desktop)
 - [Step 2 — Build and install the dev build](#step-2--build-and-install-the-dev-build)
+- [Standalone Android release](#standalone-android-release)
 - [Step 3 — Pair the phone](#step-3--pair-the-phone)
 - [Everyday dev loop](#everyday-dev-loop)
 - [Troubleshooting](#troubleshooting)
@@ -161,6 +162,20 @@ Cleartext HTTP to the bridge already works on both platforms: Android through
 > launcher UI (scan a Metro QR from inside the app, switch bundler URLs), run
 > `npx expo install expo-dev-client`, rebuild with `npx expo run:*`, and serve with
 > `npx expo start --dev-client`.
+
+### Standalone Android release
+
+`npm run android` creates a debug build that requires Metro. For a sideloadable APK that
+runs without Metro or a USB connection, use `npm run android:release`. The release build
+embeds its production JavaScript bundle as `assets/index.android.bundle`.
+
+This path was verified on a real Redmi ARM64 device: port 8081 was absent, all `adb reverse`
+mappings were removed, and the app cold-launched successfully. The resulting APK was
+ARM64-only and signed locally with the Android debug key for sideloading, not distribution.
+
+Android speech-to-text uses the native `SpeechRecognizer` and consumes no LLM tokens. Only
+the transcript sent to the model becomes model input. Desktop and browser speech-to-text
+still need verification after restarting AO.
 
 ### On a simulator / emulator
 

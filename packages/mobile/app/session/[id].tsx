@@ -11,8 +11,11 @@ import { haptics } from "../../lib/haptics";
 import { MuxClient, type MuxStatus } from "../../lib/mux";
 import { useApp } from "../../lib/store";
 import { theme } from "../../lib/theme";
+import { terminalInputDelta, terminalNamedKey } from "../../lib/terminalInput";
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 const FONT_SIZE = 12;
+const TERMINAL_ROWS = 52;
 
 // Injected into the xterm WebView after load. xterm has its own touch handlers
 // that scroll by discrete lines (the janky "1 line per swipe"). We intercept in
@@ -100,7 +103,7 @@ const TERMINAL_ENHANCE_JS = `
   function applyScale() {
     try {
       var b = box(); if (!b || !b.natW || !b.contW) return;
-      Z.min = Math.min(1, b.contW / b.natW);
+      Z.min = Math.min(1, b.contW / b.natW, b.contH / b.natH);
       if (!Z.zoomed) { Z.s = Z.min; Z.tx = 0; Z.ty = 0; }
       else { if (Z.s < Z.min) Z.s = Z.min; clampT(b); }
       applyTransform(b);
@@ -410,21 +413,6 @@ const EXTRA_KEYS: { label: string; seq: string }[] = [
 	{ label: "↵", seq: "\r" },
 ];
 
-// Named keys a hardware/Bluetooth keyboard emits (key.length > 1) mapped to the
-// bytes the PTY expects. Single-char keys are sent as-is.
-const NAMED_KEYS: Record<string, string> = {
-	Backspace: "\x7f",
-	Enter: "\r",
-	"\n": "\r",
-	Space: " ",
-	Tab: "\t",
-	Escape: "\x1b",
-	ArrowUp: "\x1b[A",
-	ArrowDown: "\x1b[B",
-	ArrowRight: "\x1b[C",
-	ArrowLeft: "\x1b[D",
-};
-
 const statusLabel: Record<MuxStatus, string> = {
 	connecting: "connecting...",
 	open: "live",
@@ -469,6 +457,7 @@ export default function TerminalScreen() {
 	// so this hidden RN TextInput is what raises the keyboard and captures typing,
 	// which we forward to the PTY over the mux. Focus it to type, blur it to hide.
 	const kbInputRef = useRef<TextInput | null>(null);
+	const terminalBufferRef = useRef("");
 
 	const [cfg, setCfg] = useState<ServerConfig | null>(null);
 	const [status, setStatus] = useState<MuxStatus>("connecting");
@@ -479,6 +468,9 @@ export default function TerminalScreen() {
 	const [compose, setCompose] = useState(false); // high-level "send message" bar
 	const [msg, setMsg] = useState("");
 	const [sending, setSending] = useState(false);
+	const [terminalBuffer, setTerminalBuffer] = useState("");
+	const [listening, setListening] = useState(false);
+	const [speechError, setSpeechError] = useState<string | null>(null);
 	// Terminal font size. Smaller font = more rows/cols, which is the only way to
 	// see more of a full-screen TUI (alt-screen apps have no scrollback). Changing
 	// it remounts the xterm; the PTY persists and re-attaches at the denser grid.
@@ -509,6 +501,20 @@ export default function TerminalScreen() {
 	const previewBase = (preview?.entry ?? "").split("/").pop() ?? "";
 	const isReadme = /^readme\.(md|markdown)$/i.test(previewBase);
 	const hasPreview = !!preview && !isReadme;
+
+	useSpeechRecognitionEvent("start", () => {
+		setListening(true);
+		setSpeechError(null);
+	});
+	useSpeechRecognitionEvent("end", () => setListening(false));
+	useSpeechRecognitionEvent("result", (event) => {
+		const transcript = event.results[0]?.transcript;
+		if (transcript) setMsg(transcript);
+	});
+	useSpeechRecognitionEvent("error", (event) => {
+		setListening(false);
+		setSpeechError(event.message || "Voice input stopped. Try again.");
+	});
 
 	// Neither platform shrinks the layout for the keyboard: iOS never has, and on
 	// Android edge-to-edge (edgeToEdgeEnabled) defeats windowSoftInputMode=adjustResize
@@ -639,7 +645,8 @@ export default function TerminalScreen() {
 	// render grid comes back via onTerminalResize; until it does, render the fit so
 	// the terminal isn't blank.
 	const applyDims = useCallback(
-		(cols: number, rows: number) => {
+		(cols: number, _rows: number) => {
+			const rows = TERMINAL_ROWS;
 			lastDimsRef.current = { cols, rows };
 			if (openedRef.current) muxRef.current?.resize(id, cols, rows, projectId);
 			if (!authRef.current) {
@@ -704,15 +711,41 @@ export default function TerminalScreen() {
 		else kbInputRef.current?.focus();
 	}, [kbVisible]);
 
-	// Each key press in the hidden input -> the matching byte(s) to the PTY.
-	const onKeyPress = useCallback(
-		(e: { nativeEvent: { key: string } }) => {
-			const k = e.nativeEvent.key;
-			const seq = NAMED_KEYS[k] ?? (k.length === 1 ? k : null);
-			if (seq !== null) muxRef.current?.sendInput(id, seq, projectId);
+	// Native text changes may contain many characters or an IME replacement. Diff
+	// the retained buffer so Android batching cannot lose input. onKeyPress handles
+	// only non-text hardware keys, avoiding duplicate text/backspace/enter bytes.
+	const onTerminalTextChange = useCallback(
+		(next: string) => {
+			const data = terminalInputDelta(terminalBufferRef.current, next);
+			terminalBufferRef.current = next;
+			setTerminalBuffer(next);
+			if (data) muxRef.current?.sendInput(id, data, projectId);
 		},
 		[id, projectId],
 	);
+
+	const onKeyPress = useCallback(
+		(e: { nativeEvent: { key: string } }) => {
+			const seq = terminalNamedKey[e.nativeEvent.key];
+			if (seq) muxRef.current?.sendInput(id, seq, projectId);
+		},
+		[id, projectId],
+	);
+
+	const startVoiceInput = useCallback(async () => {
+		if (listening) {
+			ExpoSpeechRecognitionModule.stop();
+			return;
+		}
+		setCompose(true);
+		setSpeechError(null);
+		const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+		if (!permission.granted) {
+			setSpeechError("Microphone access is needed for voice input.");
+			return;
+		}
+		ExpoSpeechRecognitionModule.start({ interimResults: true, continuous: false });
+	}, [listening]);
 
 	// High-level message to the agent (AO's /send) - distinct from raw keystrokes.
 	const sendPrompt = useCallback(async () => {
@@ -855,21 +888,6 @@ export default function TerminalScreen() {
 
 	return (
 		<View style={[styles.screen, kbHeight > 0 && { paddingBottom: kbHeight }]}>
-			<TextInput
-				ref={kbInputRef}
-				value=""
-				onKeyPress={onKeyPress}
-				onChangeText={() => {}}
-				blurOnSubmit={false}
-				multiline={false}
-				autoCapitalize="none"
-				autoCorrect={false}
-				autoComplete="off"
-				spellCheck={false}
-				keyboardAppearance="dark"
-				caretHidden
-				style={styles.kbInput}
-			/>
 			<View style={styles.statusBar}>
 				<View style={[styles.statusDot, { backgroundColor: statusColors[status] }]} />
 				<Text style={styles.statusText}>{statusLabel[status]}</Text>
@@ -986,6 +1004,24 @@ export default function TerminalScreen() {
 					</View>
 				)}
 			</View>
+			<TextInput
+				ref={kbInputRef}
+				value={terminalBuffer}
+				onKeyPress={onKeyPress}
+				onChangeText={onTerminalTextChange}
+				onSubmitEditing={() => sendKey("\r")}
+				blurOnSubmit={false}
+				multiline={false}
+				autoCapitalize="none"
+				autoCorrect={false}
+				autoComplete="off"
+				spellCheck={false}
+				keyboardAppearance="dark"
+				placeholder="Terminal input"
+				placeholderTextColor={theme.textTertiary}
+				caretHidden={false}
+				style={[styles.kbInput, kbVisible && styles.kbInputVisible]}
+			/>
 
 			{compose && (
 				<View style={[styles.composer, { paddingBottom: bottomPad }]}>
@@ -1001,6 +1037,13 @@ export default function TerminalScreen() {
 						onSubmitEditing={sendPrompt}
 					/>
 					<Pressable
+						accessibilityLabel={listening ? "Stop voice input" : "Start voice input"}
+						style={({ pressed }) => [styles.voiceBtn, listening && styles.voiceBtnListening, pressed && { opacity: 0.8 }]}
+						onPress={startVoiceInput}
+					>
+						<Feather name={listening ? "square" : "mic"} size={16} color={listening ? theme.red : theme.textPrimary} />
+					</Pressable>
+					<Pressable
 						style={({ pressed }) => [styles.sendBtn, pressed && { opacity: 0.8 }, !msg.trim() && { opacity: 0.4 }]}
 						onPress={sendPrompt}
 						disabled={!msg.trim() || sending}
@@ -1009,6 +1052,7 @@ export default function TerminalScreen() {
 					</Pressable>
 				</View>
 			)}
+			{compose && speechError && <Text style={styles.speechStatus}>{speechError}</Text>}
 
 			<View style={[styles.keys, { paddingBottom: bottomPad }]}>
 				{EXTRA_KEYS.map((k) => (
@@ -1033,6 +1077,13 @@ export default function TerminalScreen() {
 					onPress={() => setCompose((c) => !c)}
 				>
 					<Feather name="message-square" size={15} color={compose ? theme.blue : theme.textPrimary} />
+				</Pressable>
+				<Pressable
+					accessibilityLabel={listening ? "Stop voice input" : "Compose with voice"}
+					style={({ pressed }) => [styles.key, listening && styles.keyToggle, pressed && styles.keyPressed]}
+					onPress={startVoiceInput}
+				>
+					<Feather name={listening ? "square" : "mic"} size={15} color={listening ? theme.red : theme.textPrimary} />
 				</Pressable>
 				{/* Show/hide the keyboard (replaces the OS "Done" button we removed). */}
 				<Pressable
@@ -1097,6 +1148,22 @@ const styles = StyleSheet.create({
 	keyPressed: { backgroundColor: theme.accentTint, borderColor: theme.accent },
 	keyToggle: { borderColor: theme.accent, marginLeft: "auto" },
 	kbInput: { position: "absolute", width: 1, height: 1, top: 0, left: 0, opacity: 0 },
+	kbInputVisible: {
+		position: "relative",
+		width: "auto",
+		height: 32,
+		top: undefined,
+		left: undefined,
+		opacity: 1,
+		backgroundColor: theme.bgElevated,
+		borderBottomWidth: 1,
+		borderBottomColor: theme.accent,
+		color: theme.textPrimary,
+		fontFamily: theme.fontMono,
+		fontSize: 13,
+		paddingHorizontal: 10,
+		paddingVertical: 5,
+	},
 	keyText: { color: theme.textPrimary, fontFamily: theme.fontMono, fontSize: 14 },
 	killBtn: {
 		flexDirection: "row",
@@ -1225,4 +1292,15 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		justifyContent: "center",
 	},
+	voiceBtn: {
+		width: 40,
+		height: 40,
+		borderRadius: 10,
+		borderWidth: 1,
+		borderColor: theme.borderDefault,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	voiceBtnListening: { backgroundColor: theme.tintRed, borderColor: theme.red },
+	speechStatus: { color: theme.red, backgroundColor: theme.bgSurface, paddingHorizontal: 12, paddingVertical: 4, fontSize: 12 },
 });

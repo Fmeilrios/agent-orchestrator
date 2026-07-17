@@ -50,7 +50,14 @@
 					"recordAudioAndroid": false
 				}
 			],
-			"expo-secure-store"
+			"expo-secure-store",
+			[
+				"expo-speech-recognition",
+				{
+					"microphonePermission": "Allow AO to hear your voice input.",
+					"speechRecognitionPermission": "Allow AO to turn your speech into text."
+				}
+			]
 		],
 		"extra": {
 			"router": {}

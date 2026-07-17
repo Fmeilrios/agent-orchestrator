@@ -89,6 +89,9 @@ func (p *Plugin) GetLaunchCommand(ctx context.Context, cfg ports.LaunchConfig) (
 	} else if cfg.SystemPromptFile != "" {
 		cmd = append(cmd, "-c", "model_instructions_file="+cfg.SystemPromptFile)
 	}
+	if model := strings.TrimSpace(cfg.Config.Model); model != "" {
+		cmd = append(cmd, "--model", model)
+	}
 
 	if cfg.Prompt != "" {
 		cmd = append(cmd, "--", cfg.Prompt)
@@ -128,6 +131,9 @@ func (p *Plugin) GetRestoreCommand(ctx context.Context, cfg ports.RestoreConfig)
 		cmd = append(cmd, "-c", "developer_instructions="+codexTOMLConfigString(cfg.SystemPrompt))
 	} else if cfg.SystemPromptFile != "" {
 		cmd = append(cmd, "-c", "model_instructions_file="+cfg.SystemPromptFile)
+	}
+	if model := strings.TrimSpace(cfg.Config.Model); model != "" {
+		cmd = append(cmd, "--model", model)
 	}
 	cmd = append(cmd, agentSessionID)
 	return cmd, true, nil

@@ -90,6 +90,22 @@ func TestGetLaunchCommandWithoutWorkspaceOmitsTrustFlag(t *testing.T) {
 	}
 }
 
+func TestGetLaunchCommandAppendsTrimmedModelBeforePrompt(t *testing.T) {
+	plugin := &Plugin{resolvedBinary: "codex"}
+
+	cmd, err := plugin.GetLaunchCommand(context.Background(), ports.LaunchConfig{
+		Config: ports.AgentConfig{Model: "  gpt-5.4  "},
+		Prompt: "-fix this",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"--model", "gpt-5.4", "--", "-fix this"}
+	if got := cmd[len(cmd)-len(want):]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("launch tail\nwant: %#v\n got: %#v", want, got)
+	}
+}
+
 func TestResolveCodexBinaryFindsNVMInstallWhenPathIsSparse(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("NVM install discovery is Unix-specific")
@@ -502,6 +518,27 @@ func TestGetRestoreCommandReadsAgentSessionID(t *testing.T) {
 	)
 	if !reflect.DeepEqual(cmd, want) {
 		t.Fatalf("restore cmd\nwant: %#v\n got: %#v", want, cmd)
+	}
+}
+
+func TestGetRestoreCommandAppendsTrimmedModelBeforeSessionID(t *testing.T) {
+	plugin := &Plugin{resolvedBinary: "codex"}
+
+	cmd, ok, err := plugin.GetRestoreCommand(context.Background(), ports.RestoreConfig{
+		Config: ports.AgentConfig{Model: "  gpt-5.4  "},
+		Session: ports.SessionRef{
+			Metadata: map[string]string{ports.MetadataKeyAgentSessionID: "thread-123"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+	want := []string{"--model", "gpt-5.4", "thread-123"}
+	if got := cmd[len(cmd)-len(want):]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("restore tail\nwant: %#v\n got: %#v", want, got)
 	}
 }
 

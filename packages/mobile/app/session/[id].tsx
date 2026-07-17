@@ -9,6 +9,7 @@ import { getPreview, isTerminalStatus, killSession, sendMessage } from "../../li
 import { authHeaders, isConfigured, loadConfig, type ServerConfig } from "../../lib/config";
 import { haptics } from "../../lib/haptics";
 import { MuxClient, type MuxStatus } from "../../lib/mux";
+import { forgetNotificationSession, rememberNotificationSession } from "../../lib/ongoingNotification";
 import { useApp } from "../../lib/store";
 import { theme } from "../../lib/theme";
 import { terminalInputDelta, terminalInputEnter, terminalInputKey } from "../../lib/terminalInput";
@@ -427,7 +428,7 @@ const statusColors: Record<MuxStatus, string> = {
 };
 
 export default function TerminalScreen() {
-	const params = useLocalSearchParams<{ id: string; projectId?: string }>();
+	const params = useLocalSearchParams<{ id: string; projectId?: string; voice?: string }>();
 	const id = String(params.id);
 	const projectId = params.projectId ? String(params.projectId) : undefined;
 	const router = useRouter();
@@ -459,6 +460,12 @@ export default function TerminalScreen() {
 	const kbInputRef = useRef<TextInput | null>(null);
 	const terminalBufferRef = useRef("");
 	const speechAllowedRef = useRef(true);
+	const notificationVoiceStartedRef = useRef(false);
+
+	useEffect(() => {
+		void rememberNotificationSession(id);
+		return () => void forgetNotificationSession(id);
+	}, [id]);
 
 	const [cfg, setCfg] = useState<ServerConfig | null>(null);
 	const [status, setStatus] = useState<MuxStatus>("connecting");
@@ -778,6 +785,12 @@ export default function TerminalScreen() {
 			setSpeechError(error instanceof Error && error.message ? error.message : "Voice input could not start. Try again.");
 		}
 	}, [listening]);
+
+	useEffect(() => {
+		if (params.voice !== "1" || notificationVoiceStartedRef.current || AppState.currentState !== "active") return;
+		notificationVoiceStartedRef.current = true;
+		void startVoiceInput();
+	}, [params.voice, startVoiceInput]);
 
 	// High-level message to the agent (AO's /send) - distinct from raw keystrokes.
 	const sendPrompt = useCallback(async () => {

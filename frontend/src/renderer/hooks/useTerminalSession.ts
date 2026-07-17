@@ -59,15 +59,6 @@ const OPEN_TIMEOUT_MS = 3_000;
 // sizes; the attached program should get one SIGWINCH when the drag settles,
 // not dozens (yyork's terminal-panel does the same at its socket layer).
 const RESIZE_DEBOUNCE_MS = 100;
-// One follow-up frame with the same grid after each settled resize. xterm only
-// fires onResize on actual grid changes and the kernel only raises SIGWINCH on
-// actual size changes, so a resize update the zellij client loses (raced
-// mid-attach, coalesced during a drag) would otherwise desync the session's
-// layout from the pane until the NEXT real change — the terminal keeps
-// painting at the old size. The backend answers every resize frame with an
-// explicit SIGWINCH (pty_unix.go), so this re-assert makes the client re-read
-// and re-report its grid; when everything is already in sync it's a no-op.
-const RESIZE_REASSERT_MS = 250;
 
 function defaultCreateMux(): TerminalMux {
 	// Resolved per connect, not per hook: a daemon restart can change the port.
@@ -96,7 +87,7 @@ export function useTerminalSession(session: WorkspaceSession | undefined, option
 		openTimer: null as ReturnType<typeof setTimeout> | null,
 		resizeTimer: null as ReturnType<typeof setTimeout> | null,
 		attempts: 0,
-		firstAttach: true,
+		lastSize: null as { cols: number; rows: number } | null,
 		generation: 0,
 		inputReady: false,
 		detached: true,
@@ -234,19 +225,17 @@ export function useTerminalSession(session: WorkspaceSession | undefined, option
 		});
 		// xterm only fires onResize when the grid actually changed; the debounce
 		// additionally collapses a drag's burst of changes into one PTY resize.
-		// Each settled resize is re-asserted once (see RESIZE_REASSERT_MS); both
-		// stages share resizeTimer so a new burst or teardown cancels either.
+		// Do not re-send the same grid: every backend resize raises SIGWINCH, which
+		// makes full-screen apps repaint their whole screen.
 		const resize = terminal.onResize(({ cols, rows }) => {
 			if (!isCurrentAttachment(generation, handle, mux)) return;
 			if (r.resizeTimer) clearTimeout(r.resizeTimer);
 			r.resizeTimer = setTimeout(() => {
+				r.resizeTimer = null;
 				if (!isCurrentAttachment(generation, handle, mux)) return;
+				if (r.lastSize?.cols === cols && r.lastSize.rows === rows) return;
+				r.lastSize = { cols, rows };
 				mux.resize(handle, cols, rows);
-				r.resizeTimer = setTimeout(() => {
-					r.resizeTimer = null;
-					if (!isCurrentAttachment(generation, handle, mux)) return;
-					mux.resize(handle, cols, rows);
-				}, RESIZE_REASSERT_MS);
 			}, RESIZE_DEBOUNCE_MS);
 		});
 		r.disposers.push(
@@ -254,18 +243,10 @@ export function useTerminalSession(session: WorkspaceSession | undefined, option
 			() => resize.dispose(),
 		);
 
-		// Connection status is chrome (the pane's banner), never buffer content —
-		// the PTY owns the buffer. Each open spawns a fresh server-side `zellij
-		// attach` (backend internal/terminal/attachment.go) that answers with its
-		// init handshake + a full repaint; clear the stale screen so the repaint
-		// lands on a blank grid. Screen-clear only, never reset(): RIS would drop
-		// zellij's mouse-tracking mode until the handshake lands.
-		if (!r.firstAttach) {
-			terminal.clear();
-		}
-		r.firstAttach = false;
-
+		// Keep current pixels during reconnect. Fresh attach output repaints them;
+		// clearing first exposes that repaint as a top-to-bottom flash.
 		mux.open(handle, terminal.cols, terminal.rows);
+		r.lastSize = { cols: terminal.cols, rows: terminal.rows };
 		mux.resize(handle, terminal.cols, terminal.rows);
 		r.openTimer = setTimeout(() => {
 			if (!isCurrentAttachment(generation, handle, mux)) return;
@@ -294,7 +275,7 @@ export function useTerminalSession(session: WorkspaceSession | undefined, option
 			r.handle = handle;
 			r.detached = false;
 			r.attempts = 0;
-			r.firstAttach = true;
+			r.lastSize = null;
 			setError(undefined);
 			if (handle) {
 				if (optionsRef.current.daemonReady) {

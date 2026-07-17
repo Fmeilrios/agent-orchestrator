@@ -13,6 +13,7 @@ import { forgetNotificationSession, rememberNotificationSession } from "../../li
 import { useApp } from "../../lib/store";
 import { theme } from "../../lib/theme";
 import { terminalInputDelta, terminalInputEnter, terminalInputKey } from "../../lib/terminalInput";
+import { terminalSizeChanged } from "../../lib/terminalSize";
 import { shouldStartVoiceAction } from "../../lib/voiceAction";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
@@ -450,6 +451,7 @@ export default function TerminalScreen() {
 	// Last grid size reported by the WebView's FitAddon, so we can send it to the
 	// PTY the moment the terminal opens (dims may arrive before or after open).
 	const lastDimsRef = useRef<{ cols: number; rows: number } | null>(null);
+	const sentDimsRef = useRef<{ cols: number; rows: number } | null>(null);
 	// The authoritative grid the daemon told us the shared PTY is actually using
 	// (driven by the largest/primary client — e.g. a co-viewing desktop). We render
 	// THIS grid (scaled to fit), not the phone's own fit, so the display matches the
@@ -669,8 +671,12 @@ export default function TerminalScreen() {
 	const applyDims = useCallback(
 		(cols: number, _rows: number) => {
 			const rows = TERMINAL_ROWS;
-			lastDimsRef.current = { cols, rows };
-			if (openedRef.current) muxRef.current?.resize(id, cols, rows, projectId);
+			const next = { cols, rows };
+			lastDimsRef.current = next;
+			if (openedRef.current && terminalSizeChanged(sentDimsRef.current, next)) {
+				sentDimsRef.current = next;
+				muxRef.current?.resize(id, cols, rows, projectId);
+			}
 			if (!authRef.current) {
 				setSize({ cols, rows });
 				xtermRef.current?.resize({ cols, rows });
@@ -709,7 +715,10 @@ export default function TerminalScreen() {
 		muxRef.current?.openTerminal(id, projectId);
 		// If the FitAddon already reported dims before open, send them to the PTY now.
 		const d = lastDimsRef.current;
-		if (d) muxRef.current?.resize(id, d.cols, d.rows, projectId);
+		if (d) {
+			sentDimsRef.current = d;
+			muxRef.current?.resize(id, d.cols, d.rows, projectId);
+		}
 	}, [id, projectId]);
 
 	const onData = useCallback(

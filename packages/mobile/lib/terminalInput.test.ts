@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { terminalInputDelta, terminalInputEnter, terminalNamedKey } from "./terminalInput.ts";
+import { terminalInputDelta, terminalInputEnter, terminalInputKey, terminalNamedKey } from "./terminalInput.ts";
 
 test("forwards fast and batched text once", () => {
 	assert.equal(terminalInputDelta("", "hello world"), "hello world");
@@ -24,4 +24,11 @@ test("resets retained input after Enter", () => {
 	const enter = terminalInputEnter();
 	assert.deepEqual(enter, { data: "\r", buffer: "" });
 	assert.equal(terminalInputDelta(enter.buffer, "next"), "next");
+});
+
+test("sends Backspace for an empty buffer without duplicating native deletions", () => {
+	assert.equal(terminalInputKey("Backspace", ""), "\x7f");
+	assert.equal(terminalInputKey("Backspace", "text"), "");
+	assert.equal(terminalInputDelta("text", "tex"), "\x7f");
+	assert.equal(terminalInputKey("Backspace", terminalInputEnter().buffer), "\x7f");
 });

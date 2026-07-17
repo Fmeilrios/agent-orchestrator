@@ -11,7 +11,7 @@ import { haptics } from "../../lib/haptics";
 import { MuxClient, type MuxStatus } from "../../lib/mux";
 import { useApp } from "../../lib/store";
 import { theme } from "../../lib/theme";
-import { terminalInputDelta, terminalInputEnter, terminalNamedKey } from "../../lib/terminalInput";
+import { terminalInputDelta, terminalInputEnter, terminalInputKey } from "../../lib/terminalInput";
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from "expo-speech-recognition";
 
 const FONT_SIZE = 12;
@@ -740,7 +740,7 @@ export default function TerminalScreen() {
 
 	const onKeyPress = useCallback(
 		(e: { nativeEvent: { key: string } }) => {
-			const seq = terminalNamedKey[e.nativeEvent.key];
+			const seq = terminalInputKey(e.nativeEvent.key, terminalBufferRef.current);
 			if (seq) muxRef.current?.sendInput(id, seq, projectId);
 		},
 		[id, projectId],

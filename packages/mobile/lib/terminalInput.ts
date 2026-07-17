@@ -14,6 +14,12 @@ export function terminalInputEnter(): { data: string; buffer: string } {
 	return { data: "\r", buffer: "" };
 }
 
+/** Handle keys that native text changes cannot represent. */
+export function terminalInputKey(key: string, buffer: string): string {
+	if (key === "Backspace") return buffer ? "" : DELETE;
+	return terminalNamedKey[key] ?? "";
+}
+
 export const terminalNamedKey: Record<string, string> = {
 	Tab: "\t",
 	Escape: "\x1b",

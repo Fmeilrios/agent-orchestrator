@@ -480,13 +480,12 @@ export default function TerminalScreen() {
 	// Track that + the known status so we can offer Restore instead of a dead term.
 	const [notFound, setNotFound] = useState(false);
 	const [restoring, setRestoring] = useState(false);
-	// In-app browser: shows the static preview file the agent generated (an
-	// index.html). We poll the daemon's on-demand detector while the terminal is
+	// In-app browser shows the latest web preview or Markdown document. We poll
+	// the daemon's on-demand detector while the terminal is
 	// open, but we deliberately DO NOT auto-open the overlay: the detector falls back
 	// to any previewable file (e.g. a repo's README.md), so auto-popping would steal
 	// the screen with an unbuilt/blank page. Instead the globe button lights up with a
-	// green dot when the agent has produced something to view (any previewable file
-	// except the repo README); the user taps it to open.
+	// green dot when the agent has produced something to view; the user taps it.
 	const [browserOpen, setBrowserOpen] = useState(false);
 	const [preview, setPreview] = useState<{ entry: string; url: string } | null>(null);
 	const previewWebRef = useRef<WebView>(null);
@@ -494,14 +493,8 @@ export default function TerminalScreen() {
 	const { sessions, orchestrators, restore } = useApp();
 	const known = sessions.find((s) => s.id === id) ?? orchestrators.find((o) => o.id === id) ?? null;
 	const dead = notFound || (known ? isTerminalStatus(known.status) : false);
-	// What counts as a live preview: any file the daemon surfaces (an .html build, or
-	// a generated doc like plan.md / a report) EXCEPT a repo's README, which the
-	// detector's markdown fallback always matches on a fresh checkout. Filtering the
-	// README out keeps the globe's green dot meaningful — it means "there's something
-	// the agent produced to view", not just "this repo has a README".
-	const previewBase = (preview?.entry ?? "").split("/").pop() ?? "";
-	const isReadme = /^readme\.(md|markdown)$/i.test(previewBase);
-	const hasPreview = !!preview && !isReadme;
+	// The daemon chooses between a detected web entry and latest Markdown file.
+	const hasPreview = !!preview;
 
 	useSpeechRecognitionEvent("start", () => {
 		setListening(true);
@@ -806,8 +799,7 @@ export default function TerminalScreen() {
 	}, [msg, cfg, id]);
 
 	// Toggle the in-app browser. The poll above keeps `preview` current, so a tap
-	// just shows/hides the overlay. A bare README (the detector's markdown fallback)
-	// reports "no preview yet" instead of surfacing an unbuilt repo doc.
+	// just shows or hides the overlay.
 	const toggleBrowser = useCallback(() => {
 		haptics.tap();
 		if (browserOpen) {
@@ -815,7 +807,7 @@ export default function TerminalScreen() {
 			return;
 		}
 		if (!hasPreview) {
-			setBanner("No preview yet - waiting for the agent to generate a page or document...");
+			setBanner("No preview yet. Waiting for a page or document.");
 			return;
 		}
 		setBrowserOpen(true);
@@ -935,9 +927,7 @@ export default function TerminalScreen() {
 						{size.cols}x{size.rows}
 					</Text>
 				)}
-				{/* In-app browser toggle - shows a page or doc the agent generated. Goes
-				    green with a dot when one is available; tap to open (we never
-				    auto-open, so a bare README can't pop a blank page). */}
+				{/* In-app browser toggle for the latest page or Markdown document. */}
 				<Pressable
 					hitSlop={8}
 					onPress={toggleBrowser}

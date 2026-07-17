@@ -22,35 +22,34 @@ func writeEntryFile(t *testing.T, path, contents string, mod time.Time) {
 	}
 }
 
-func TestDiscoverEntryPrefersIndexOverNewerFile(t *testing.T) {
+func TestDiscoverEntryPrefersNewerMarkdownOverWebPreview(t *testing.T) {
 	ws := t.TempDir()
 	base := time.Now()
 	writeEntryFile(t, filepath.Join(ws, "index.html"), "<main>app</main>", base)
 	// A newer report must not win against the conventional index.html anchor.
-	writeEntryFile(t, filepath.Join(ws, "report.html"), "<main>report</main>", base.Add(time.Hour))
+	writeEntryFile(t, filepath.Join(ws, "report.md"), "# report", base.Add(time.Hour))
 
 	entry, ok := DiscoverEntry(ws)
 	if !ok {
 		t.Fatal("DiscoverEntry: ok=false, want entry")
 	}
-	if entry.Path != "index.html" {
-		t.Fatalf("entry.Path = %q, want index.html", entry.Path)
+	if entry.Path != "report.md" {
+		t.Fatalf("entry.Path = %q, want report.md", entry.Path)
 	}
 }
 
-func TestDiscoverEntryFallsBackToMostRecentPreviewable(t *testing.T) {
+func TestDiscoverEntryPrefersNewerWebPreviewOverMarkdown(t *testing.T) {
 	ws := t.TempDir()
 	base := time.Now()
-	writeEntryFile(t, filepath.Join(ws, "old.html"), "<main>old</main>", base)
 	writeEntryFile(t, filepath.Join(ws, "docs", "notes.md"), "# notes", base.Add(30*time.Minute))
-	writeEntryFile(t, filepath.Join(ws, "fresh.html"), "<main>fresh</main>", base.Add(time.Hour))
+	writeEntryFile(t, filepath.Join(ws, "dist", "index.html"), "<main>fresh</main>", base.Add(time.Hour))
 
 	entry, ok := DiscoverEntry(ws)
 	if !ok {
 		t.Fatal("DiscoverEntry: ok=false, want fallback entry")
 	}
-	if entry.Path != "fresh.html" {
-		t.Fatalf("entry.Path = %q, want fresh.html", entry.Path)
+	if entry.Path != "dist/index.html" {
+		t.Fatalf("entry.Path = %q, want dist/index.html", entry.Path)
 	}
 }
 
@@ -73,6 +72,7 @@ func TestDiscoverEntrySkipsHiddenAndNodeModules(t *testing.T) {
 	// Newest files live in skipped dirs; the visible one must win.
 	writeEntryFile(t, filepath.Join(ws, "node_modules", "pkg", "index.html"), "x", base.Add(time.Hour))
 	writeEntryFile(t, filepath.Join(ws, ".cache", "cached.html"), "x", base.Add(2*time.Hour))
+	writeEntryFile(t, filepath.Join(ws, "coverage", "report.md"), "x", base.Add(3*time.Hour))
 	writeEntryFile(t, filepath.Join(ws, "visible.html"), "ok", base)
 
 	entry, ok := DiscoverEntry(ws)

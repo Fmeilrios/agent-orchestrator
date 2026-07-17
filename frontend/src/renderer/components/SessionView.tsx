@@ -8,6 +8,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "./ui/resiz
 import { useUiStore } from "../stores/ui-store";
 import { useShell } from "../lib/shell-context";
 import { useBrowserView } from "../hooks/useBrowserView";
+import { apiClient } from "../lib/api-client";
 import { useWorkspaceQuery } from "../hooks/useWorkspaceQuery";
 import { isOrchestratorSession } from "../types/workspace";
 import type { TerminalTarget } from "../types/terminal";
@@ -49,12 +50,13 @@ export function SessionView({ sessionId }: SessionViewProps) {
 	const [terminalTarget, setTerminalTarget] = useState<TerminalTarget>({ kind: "worker" });
 	const [browserPoppedOut, setBrowserPoppedOut] = useState(false);
 	const [inspectorView, setInspectorView] = useState<InspectorView>("summary");
+	const [discoveredPreviewUrl, setDiscoveredPreviewUrl] = useState<string>();
 
 	const session = workspaces.flatMap((workspace) => workspace.sessions).find((s) => s.id === sessionId);
 	const isOrchestrator = session ? isOrchestratorSession(session) : false;
 	// Orchestrator sessions are terminal-only; only worker sessions have the rail.
 	const hasInspector = !isOrchestrator;
-	const previewUrl = session?.previewUrl?.trim() || undefined;
+	const previewUrl = session?.previewUrl?.trim() || discoveredPreviewUrl;
 	const previewRevision = session?.previewRevision;
 	const revealedPreviewRef = useRef<number | null>(null);
 	const browserView = useBrowserView({
@@ -69,6 +71,23 @@ export function SessionView({ sessionId }: SessionViewProps) {
 		sessionId: session?.id,
 		navUrl: browserView.navState.url,
 	});
+
+	useEffect(() => {
+		setDiscoveredPreviewUrl(undefined);
+	}, [sessionId]);
+
+	useEffect(() => {
+		if (inspectorView !== "browser" || !session || session.previewUrl?.trim()) return;
+		let cancelled = false;
+		void apiClient
+			.GET("/api/v1/sessions/{sessionId}/preview", { params: { path: { sessionId: session.id } } })
+			.then(({ data }) => {
+				if (!cancelled) setDiscoveredPreviewUrl(data?.previewUrl || undefined);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [inspectorView, session]);
 
 	useEffect(() => {
 		setTerminalTarget({ kind: "worker" });

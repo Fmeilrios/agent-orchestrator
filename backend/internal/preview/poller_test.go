@@ -70,10 +70,19 @@ func TestPollerUsesFirstExistingEntrypoint(t *testing.T) {
 	})
 }
 
-func TestPollerPreservesEntrypointPriority(t *testing.T) {
+func TestPollerUsesLatestEntrypoint(t *testing.T) {
 	workspace := t.TempDir()
-	writeFile(t, filepath.Join(workspace, "public", "index.html"), "<main>public</main>")
-	writeFile(t, filepath.Join(workspace, "dist", "index.html"), "<main>dist</main>")
+	public := filepath.Join(workspace, "public", "index.html")
+	dist := filepath.Join(workspace, "dist", "index.html")
+	writeFile(t, public, "<main>public</main>")
+	writeFile(t, dist, "<main>dist</main>")
+	base := time.Now()
+	if err := os.Chtimes(public, base, base); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(dist, base.Add(time.Second), base.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
 	svc := &fakePreviewSessions{sessions: []domain.SessionRecord{workerSession("ao-1", workspace, "")}}
 	poller := NewPoller(svc, svc, "http://127.0.0.1:3001", PollerConfig{Logger: discardLogger()})
 
@@ -83,7 +92,7 @@ func TestPollerPreservesEntrypointPriority(t *testing.T) {
 
 	assertSets(t, svc.sets, previewSet{
 		id:  "ao-1",
-		url: "http://127.0.0.1:3001/api/v1/sessions/ao-1/preview/files/public/index.html",
+		url: "http://127.0.0.1:3001/api/v1/sessions/ao-1/preview/files/dist/index.html",
 	})
 }
 

@@ -14,14 +14,7 @@ import (
 
 var entryCandidates = []string{"index.html", "public/index.html", "dist/index.html", "build/index.html"}
 
-// previewableExts are the file extensions the browser panel can render: HTML
-// verbatim and Markdown converted to HTML by the preview/files route.
-var previewableExts = map[string]struct{}{
-	".html":     {},
-	".htm":      {},
-	".md":       {},
-	".markdown": {},
-}
+var previewableExts = map[string]struct{}{".html": {}, ".htm": {}, ".md": {}, ".markdown": {}}
 
 // maxPreviewWalkFiles bounds the most-recent fallback scan so a pathological
 // workspace cannot stall the preview poller.
@@ -36,14 +29,14 @@ type Entry struct {
 }
 
 // DiscoverEntry returns the entry the browser panel should preview for a
-// workspace. A conventional index.html (or its public/dist/build variants)
-// always wins; when none exists it falls back to the most-recently-modified
-// previewable file (.html/.htm/.md/.markdown) anywhere in the workspace, so a
-// freshly generated report or document shows up automatically.
+// workspace. The newest conventional web entry or Markdown document wins, so
+// a generated document remains available until a newer web preview exists.
 func DiscoverEntry(workspacePath string) (Entry, bool) {
 	if strings.TrimSpace(workspacePath) == "" {
 		return Entry{}, false
 	}
+	var best Entry
+	found := false
 	for _, candidate := range entryCandidates {
 		file, ok := ConfinedPath(workspacePath, candidate)
 		if !ok {
@@ -51,10 +44,17 @@ func DiscoverEntry(workspacePath string) (Entry, bool) {
 		}
 		info, err := os.Stat(file)
 		if err == nil && !info.IsDir() {
-			return Entry{Path: candidate, AbsPath: file, ModTime: info.ModTime(), Size: info.Size()}, true
+			entry := Entry{Path: candidate, AbsPath: file, ModTime: info.ModTime(), Size: info.Size()}
+			if !found || entry.ModTime.After(best.ModTime) || entry.ModTime.Equal(best.ModTime) && entry.Path < best.Path {
+				best, found = entry, true
+			}
 		}
 	}
-	return mostRecentPreviewable(workspacePath)
+	recent, ok := mostRecentPreviewable(workspacePath)
+	if ok && (!found || recent.ModTime.After(best.ModTime) || recent.ModTime.Equal(best.ModTime) && recent.Path < best.Path) {
+		return recent, true
+	}
+	return best, found
 }
 
 // mostRecentPreviewable walks the workspace and returns the newest previewable
@@ -119,7 +119,7 @@ func newerPreviewable(info fs.FileInfo, relSlash string, best Entry) bool {
 }
 
 func skipPreviewDir(name string) bool {
-	return strings.HasPrefix(name, ".") || name == "node_modules"
+	return strings.HasPrefix(name, ".") || name == "node_modules" || name == "coverage"
 }
 
 // IsMarkdownPath reports whether p names a Markdown file the preview/files

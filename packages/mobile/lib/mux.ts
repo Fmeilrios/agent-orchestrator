@@ -1,4 +1,5 @@
 import { authHeaders, muxUrl, type ServerConfig } from "./config";
+import { terminalOpenFrames } from "./terminalConnection";
 
 // Mirrors AO's mux-protocol.ts (the bits we use).
 export type SessionPatch = {
@@ -104,10 +105,9 @@ export class MuxClient {
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private pingTimer: ReturnType<typeof setInterval> | null = null;
 	private backoff = 1000;
-	// Terminals we want open, so we can re-open them after a reconnect. Maps the
-	// session id -> its projectId so the re-open carries projectId too (the server
-	// may need it to locate the right session across projects).
-	private openTerminals = new Map<string, string | undefined>();
+	// Terminals we want open, including their latest grid so a new connection can
+	// restore the daemon member size even when the local layout has not changed.
+	private openTerminals = new Map<string, { projectId?: string; cols?: number; rows?: number }>();
 	private subscribed = false;
 
 	constructor(cfg: ServerConfig, handlers: Handlers) {
@@ -146,8 +146,8 @@ export class MuxClient {
 			this.handlers.onStatus?.("open");
 			if (this.subscribed) this.send({ ch: "subscribe", topics: ["sessions", "notifications"] });
 			// Re-open any terminals that were active before a reconnect (with projectId).
-			for (const [id, projectId] of this.openTerminals) {
-				this.send({ ch: "terminal", id, type: "open", projectId, role: "secondary" });
+			for (const [id, { projectId, cols, rows }] of this.openTerminals) {
+				for (const frame of terminalOpenFrames(id, projectId, cols, rows)) this.send(frame);
 			}
 			this.pingTimer = setInterval(() => {
 				this.send({ ch: "system", type: "ping" });
@@ -255,7 +255,7 @@ export class MuxClient {
 	}
 
 	openTerminal(id: string, projectId?: string) {
-		this.openTerminals.set(id, projectId);
+		this.openTerminals.set(id, { ...this.openTerminals.get(id), projectId });
 		// The phone is always a follower: it announces role "secondary" so a
 		// co-attached desktop drives the shared PTY grid (and the phone renders that
 		// grid scaled). When the phone is the only client the daemon falls back to
@@ -269,6 +269,8 @@ export class MuxClient {
 	}
 
 	resize(id: string, cols: number, rows: number, projectId?: string) {
+		const terminal = this.openTerminals.get(id);
+		if (terminal) this.openTerminals.set(id, { ...terminal, projectId, cols, rows });
 		this.send({ ch: "terminal", id, type: "resize", cols, rows, projectId });
 	}
 

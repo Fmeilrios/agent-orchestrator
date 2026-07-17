@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -307,6 +308,38 @@ func TestGetConfigSpecHasNoCustomFieldsYet(t *testing.T) {
 	}
 	if len(spec.Fields) != 0 {
 		t.Fatalf("unexpected config fields: %#v", spec.Fields)
+	}
+}
+
+func TestAuthStatusUsesHiddenCommandContext(t *testing.T) {
+	plugin := &Plugin{resolvedBinary: "codex"}
+	orig := authStatusCommandContext
+	t.Cleanup(func() { authStatusCommandContext = orig })
+
+	called := false
+	authStatusCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		called = true
+		if name != "codex" {
+			t.Fatalf("name = %q, want codex", name)
+		}
+		if !reflect.DeepEqual(args, []string{"login", "status"}) {
+			t.Fatalf("args = %#v, want login status", args)
+		}
+		if runtime.GOOS == "windows" {
+			return exec.Command("cmd", "/c", "echo", "logged in")
+		}
+		return exec.Command("sh", "-c", "printf 'logged in\n'")
+	}
+
+	got, err := plugin.AuthStatus(context.Background())
+	if err != nil {
+		t.Fatalf("AuthStatus: %v", err)
+	}
+	if !called {
+		t.Fatal("AuthStatus did not use authStatusCommandContext")
+	}
+	if got != ports.AgentAuthStatusAuthorized {
+		t.Fatalf("AuthStatus = %q, want authorized", got)
 	}
 }
 

@@ -21,6 +21,7 @@ import (
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters"
 	"github.com/aoagents/agent-orchestrator/backend/internal/adapters/agent/agentbase"
 	"github.com/aoagents/agent-orchestrator/backend/internal/ports"
+	aoprocess "github.com/aoagents/agent-orchestrator/backend/internal/process"
 )
 
 // Plugin is the Codex agent adapter. It is safe for concurrent use; the binary
@@ -50,6 +51,11 @@ func (p *Plugin) EmitsBlockedActivity() bool { return false }
 var _ adapters.Adapter = (*Plugin)(nil)
 var _ ports.Agent = (*Plugin)(nil)
 var _ ports.AgentAuthChecker = (*Plugin)(nil)
+
+// authStatusCommandContext runs the Codex auth probe through AO's hidden
+// process helper. On Windows that keeps the local `codex login status` probe
+// from flashing a console window when inventory refresh/probe paths call it.
+var authStatusCommandContext = aoprocess.CommandContext
 
 // Manifest returns the adapter's static self-description.
 func (p *Plugin) Manifest() adapters.Manifest {
@@ -158,7 +164,7 @@ func (p *Plugin) AuthStatus(ctx context.Context) (ports.AgentAuthStatus, error) 
 	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	out, err := exec.CommandContext(probeCtx, binary, "login", "status").CombinedOutput()
+	out, err := authStatusCommandContext(probeCtx, binary, "login", "status").CombinedOutput()
 	if probeCtx.Err() != nil {
 		return ports.AgentAuthStatusUnknown, probeCtx.Err()
 	}
